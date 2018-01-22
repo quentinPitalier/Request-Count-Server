@@ -6,45 +6,55 @@ import (
     "io"
     "sync"
     "time"
-    "github.com/gorilla/websocket"
     "log"
+    "encoding/json"
+    "github.com/gorilla/websocket"
+    "github.com/gorilla/mux"
 )
 
 // Number of calls to local server.
 var counter int
+
 // Mutex to protect the numberCalls variable
 var lock sync.Mutex
 
 // Websocket
 var upgrader = websocket.Upgrader{}
+
 // JSON counter
 type Counter struct {
-        Counter    int `json:"counter"`
+    Counter    int `json:"Counter"`
 }
 
-func importantFunction(name string) {
-    lock.Lock()
-    defer lock.Unlock()
-    fmt.Println(name)
-    time.Sleep(1 * time.Second)
-}
-
-func handlerGeneralWebsite(w http.ResponseWriter, r *http.Request) {
-
+func increaseRequestCounter(){
     // Protect the variable from multi-thread modification with a Mutex
     lock.Lock()
     //Update the simple counter
     counter++
     // Unlock
     lock.Unlock()
+}
+
+/**
+* -- handlerGeneralWebsite --
+* Display a simple text page as an HTTP response
+* Increase the counter for each request
+*/
+
+func handlerGeneralWebsite(w http.ResponseWriter, r *http.Request) {
+
+    increaseRequestCounter()
 
     msg := fmt.Sprintf("Hello TheThingsNetwork team! \n\n HTTP Counter: localhost:8080/counter\n JSON Api Counter: localhost:8080/json-api\n Web-Socket Counter: localhost:8080/ws")
     io.WriteString(w, msg)
 }
 
-func handleHttpCounter(w http.ResponseWriter, req *http.Request) {
+/**
+* -- handleHttpCounter --
+* Display a simple text page as an HTTP response
+*/
 
-    //Display a simple counter on the page
+func handleHttpCounter(w http.ResponseWriter, req *http.Request) {
 
     // Protect the variable from multi-thread modification with a Mutex
     lock.Lock()
@@ -56,12 +66,23 @@ func handleHttpCounter(w http.ResponseWriter, req *http.Request) {
 
 }
 
+/**
+* -- handleJSONApiCounter --
+* Send a JSON object "Counter" as a HTTP response, contening the int counter
+*/
+
 func handleJSONApiCounter(w http.ResponseWriter, req *http.Request){
 
-  //Will handle JSON request
+  c := Counter{counter}
+  json.NewEncoder(w).Encode(c)
 
 }
 
+/**
+* -- handleWebSocketCounter --
+* Create a webscoket and broadcast counter value
+* Value is update it every 5s
+*/
 func handleWebSocketCounter(w http.ResponseWriter, r *http.Request) {
 
         // Upgrade initial GET request to a websocket
@@ -84,25 +105,28 @@ func handleWebSocketCounter(w http.ResponseWriter, r *http.Request) {
         // Close WebSocket
         defer ws.Close()
 }
-
+/**
+* -- main --
+* Routes creation and serve
+*/
 func main() {
 
+    // Create a router
+    router := mux.NewRouter()
+
     //General route, accept paramaters
-    http.HandleFunc("/", handlerGeneralWebsite)
+    router.HandleFunc("/", handlerGeneralWebsite).Methods("GET")
 
     // Configure HTTP route
-    http.HandleFunc("/counter", handleHttpCounter)
+    router.HandleFunc("/counter", handleHttpCounter).Methods("GET")
 
     // Configure a JSON route
-    http.HandleFunc("/json-api", handleJSONApiCounter)
+    router.HandleFunc("/counter/json-api", handleJSONApiCounter).Methods("GET")
 
     // Configure websocket route
-    http.HandleFunc("/ws", handleWebSocketCounter)
+    router.HandleFunc("/counter/ws", handleWebSocketCounter).Methods("GET")
 
     //Start to serve (localhost:8080)
-    log.Println("http server started on :8080")
-        err := http.ListenAndServe(":8080", nil)
-        if err != nil {
-                log.Fatal("ListenAndServe: ", err)
-        }
+    log.Println("http server started on :8000")
+    log.Fatal(http.ListenAndServe(":8000", router))
 }
